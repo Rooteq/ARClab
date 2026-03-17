@@ -73,6 +73,13 @@ There two data structures important for analysis of simulation results:
 - **dets** selected determinants,
 - **k** real end-effector trajectory. 
 
+# Homework
+
+use robust jacobian
+
+-before inverting G, check determinant and if its close to 0, add some alha*I (identity matrix scaled)
+- create 8 shape for reference trajectory - can be done using ifs
+
 
 
 
