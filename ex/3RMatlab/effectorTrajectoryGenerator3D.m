@@ -14,12 +14,10 @@ function [ qchd, qchd_d1, qchd_d2 ] = effectorTrajectoryGenerator3D( t, paramete
     dz = 0.0;
 
     dx_2 = dx ;
-    % dy_2 = dy + 2*k;
     dy_2 = dy + 2*k;
-    % dz_2 = dz + 2*k;
     dz_2 = dz;
 
-    switch_circle_time = 50.0;
+    switch_circle_time = t_total / 2;
 
     if t < switch_circle_time
         qchd = [-k*sin(w*t)+dx; k*cos(w*t)+dy; -0.1*k*sin(w*t)+dz];

@@ -31,7 +31,7 @@ function [ output_args, additional ] = modelODE( t, input_args, parameters )
     Kp = parameters.Kp;
     Kd = parameters.Kd;
 
-    scale = 1;
+    scale = 100;
     
     %test START
     %test STOP
@@ -66,8 +66,10 @@ function [ output_args, additional ] = modelODE( t, input_args, parameters )
     [[l3*(sin(qr(3))*sin(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)) - cos(qr(3))*cos(qr(1) + qr(2))*qr_d1(3))*qr_d1(3) - qr_d1(1)*(l3*(cos(qr(3))*cos(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)) - sin(qr(3))*sin(qr(1) + qr(2))*qr_d1(3)) + l2*cos(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)) + l1*cos(qr(1))*qr_d1(1)) - qr_d1(2)*(l3*(cos(qr(3))*cos(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)) - sin(qr(3))*sin(qr(1) + qr(2))*qr_d1(3)) + l2*cos(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)))]; [- qr_d1(2)*(l3*(sin(qr(3))*cos(qr(1) + qr(2))*qr_d1(3) + cos(qr(3))*sin(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2))) + l2*sin(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2))) - (l3*cos(qr(3))*sin(qr(1) + qr(2))*qr_d1(3) + l3*sin(qr(3))*cos(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)))*qr_d1(3) - qr_d1(1)*(l3*(sin(qr(3))*cos(qr(1) + qr(2))*qr_d1(3) + cos(qr(3))*sin(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2))) + l2*sin(qr(1) + qr(2))*(qr_d1(1) + qr_d1(2)) + l1*sin(qr(1))*qr_d1(1))]; [-l3*sin(qr(3))*qr_d1(3)^2]];
     B = ...
     [[1, 0, 0]; [0, 1, 0]; [0, 0, 1]];
+
     % T = ...
     % [[0]; [0]; [0]];
+
     T = ...
     [[parameters.Tv*qr_d1(1) + parameters.Ts*atan(scale*qr_d1(1))]; ...
     [parameters.Tv*qr_d1(2) + parameters.Ts*atan(scale*qr_d1(2))]; ...
@@ -82,64 +84,46 @@ function [ output_args, additional ] = modelODE( t, input_args, parameters )
     [qchd, qchd_d1, qchd_d2] = effectorTrajectoryGenerator3D(t, parameters);
 
         MInv = M^-1;
-
-        % y'' = P - J M^-1 C q' + J M^-1 u
-
         detJ = det(J);
-        % disp(detJ)
 
         % calculate F
-        % F = P - J M^-1 C q' - J M^-1 D - J M^-1 T        
-
         F = P - J*MInv * C * qr_d1 - J*MInv*D-J*MInv*T;
-        % F = zeros(3,1);
         
         %calculate G
-        % G = J M^-1
         G = J* MInv;
-        % G = zeros(3,3);
 
         qch = [xch; ych; zch];
         qch_d1 = [xch_d1; ych_d1; zch_d1];
 
         % calculate errors: e and e'
-        % for e' keep e_d1 notation
-        % e = qch - qchd;
-        % e' = qch' - qchd';
-        % e = zeros(3,1);
         e = qch - qchd;
         e_d1 = qch_d1 - qchd_d1;
-        % e_d1 = zeros(3,1);
 
         %calculate new input to the system v
-        % v = qd'' - Kd e' - Kp e
-        % v = zeros(3,1);
         v = qchd_d2 - parameters.Kd * e_d1 - parameters.Kp * e;
 
         detG = det(G);
 
         if abs(det(G)) < 0.01
             if det(G) > 0
-            G = G + 0.1 * eye(3);
-            % GInv = G^-1 + 0.1 * eye(3);
+                G = G + 0.1 * eye(3);
             else
                 G = G - 0.1 * eye(3);
             end
             detG = det(G);
-            % GInv = G^-1;
         end
-        GInv = G^-1;
+
 
         % calculate inverse of G as below
-        % Ginv = G^-1;
+        GInv = G^-1;
 
         % calculate control input u
-        % u = G^-1 * (v - F)
-        % u = zeros(3,1);
         u = GInv * (v-F);
         
         % calculate state
-        % qr_d2 = MInv * (B * u - C * q_d1 - D - T);   
+
+        u = zeros(3,1);
+
         qr_d2 = MInv * (B * u - C * q_d1 - D - T);   
 
     dets = [detG; detJ];            
