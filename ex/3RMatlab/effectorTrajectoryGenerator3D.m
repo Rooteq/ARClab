@@ -7,7 +7,7 @@ function [ qchd, qchd_d1, qchd_d2 ] = effectorTrajectoryGenerator3D( t, paramete
     % w = 0.030 * 2 * pi;
     % t_half = 50;
     t_total = 100;
-    w = 2*pi / (t_total/2);
+    w = 2*pi / (t_total/4);
     k = 0.25;
     dx = 1.5;
     dy = 0.1;
@@ -22,11 +22,11 @@ function [ qchd, qchd_d1, qchd_d2 ] = effectorTrajectoryGenerator3D( t, paramete
     if t < switch_circle_time
         qchd = [-k*sin(w*t)+dx; k*cos(w*t)+dy; -0.1*k*sin(w*t)+dz];
         qchd_d1 = [-k*w*cos(w*t); -k*w*sin(w*t); -0.1 * k * w * cos(w*t)];
-        qchd_d2 = [k*w^2*sin(w*t); -k*w^2*cos(w*t); 0.1 * k * w * sin(w*t)];
+        qchd_d2 = [k*w^2*sin(w*t); -k*w^2*cos(w*t); 0.1 * k * w^2 * sin(w*t)];
     else
         qchd = [k*sin(w*t)+dx_2; -k*cos(w*t)+dy_2; 0.1*k*sin(w*t)+dz_2];
         qchd_d1 = [k*w*cos(w*t); k*w*sin(w*t); 0.1 * k * w * cos(w*t)];
-        qchd_d2 = [-k*w^2*sin(w*t); k*w^2*cos(w*t); -0.1 * k * w * sin(w*t)];
+        qchd_d2 = [-k*w^2*sin(w*t); k*w^2*cos(w*t); -0.1 * k * w^2 * sin(w*t)];
     end
     
     

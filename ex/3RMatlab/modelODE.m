@@ -114,17 +114,14 @@ function [ output_args, additional ] = modelODE( t, input_args, parameters )
         end
 
 
-        % calculate inverse of G as below
+        % calculate inverse of G
         GInv = G^-1;
 
         % calculate control input u
         u = GInv * (v-F);
         
         % calculate state
-
-        u = zeros(3,1);
-
-        qr_d2 = MInv * (B * u - C * q_d1 - D - T);   
+        qr_d2 = MInv * (B * u - C * q_d1 - D - T);
 
     dets = [detG; detJ];            
         
