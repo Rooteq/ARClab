@@ -151,8 +151,10 @@ def trajectory_generator_square(t, dt=1):
 def trajectory_generator_circle(t, w=np.pi * 0.4, offset=0.2, A=1.0):
     h = np.array([A*np.cos(t*w + offset), A*np.sin(t*w + offset)])
     # TODO: calculate first and second derivative
-    h_d1 = np.array([t, t])    
-    h_d2 = np.array([t, t])
+    # h_d1 = np.array([t, t])    
+    # h_d2 = np.array([t, t])
+    h_d1 = np.array([-A*w*np.sin(t*w+offset), A*w*np.cos(t*w+offset)])    
+    h_d2 = np.array([-A*(w**2)*np.cos(t*w+offset), -A*(w**2)*np.sin(t*w+offset)])
     return h, h_d1, h_d2
 
 
@@ -206,9 +208,12 @@ class SimulatorDynamics(Simulator):
         # TODO: calculate partial derivative for dh/dq
         # h(q) diffeomorphism function was given during the 
         # lecture. It can be found also in Unicycle.h() method 
-        dh_dq = np.array([[1, 2, 3],
-                          [4, 5, 6]])
+        # dh_dq = np.array([[1, 2, 3],
+        #                   [4, 5, 6]])
+        dh_dq = np.array([[1, 0, -e*np.sin(q[2] + delta)],
+                          [0, 1, e*np.cos(q[2] + delta)]])
         Rinv = dh_dq @ G[0:3,:]
+        # print(Rinv)
         detRinv = np.linalg.det(Rinv)
         
         R = np.linalg.inv(Rinv)
@@ -237,18 +242,21 @@ class SimulatorDynamics(Simulator):
         # expressed in auxiliary velocities
         # use lecture notes. Remember to use 
         # np.dot() or '@' to multiply matrices together
-        Ms = np.eye(2,2)
-        Cs = np.eye(2,2)
-        Bs = np.eye(2,2)
+        Ms = GT @ M @ G
+        Cs = GT @ M @ G_d1
+        Bs = GT@ B
         
         # TODO: calculate Mh, Ch and Bh
         # this matrices represent Unicycle's dynamics 
         # expressed in linearized coordinates
         # use lecture notes. Remember to use 
         # np.dot() or '@' to multiply matrices together        
-        Mh = np.eye(2,2)
-        Ch = np.eye(2,2)
-        Bh = np.eye(2,2)
+        # Mh = np.eye(2,2)
+        # Ch = np.eye(2,2)
+        # Bh = np.eye(2,2)
+        Mh = R.T @ Ms @ R
+        Ch = R.T @ (Ms @ R_d1 + Cs @ R)
+        Bh = R.T @ Bs
         
         hd, hd_d1, hd_d2 = self._trajectory(t)
         
@@ -259,16 +267,26 @@ class SimulatorDynamics(Simulator):
         Kd = 20
         
         # TODO: calculate errors and theirs first derivative
-        eh = np.zeros((2))
-        eh_d1 = np.zeros((2))   
+        # eh = np.zeros((2))
+        # eh_d1 = np.zeros((2))   
+        eh = h - hd
+        eh_d1 = h_d1 - hd_d1
         
         # TODO: introduce new input to the system
-        v = np.zeros((2))       
+        # v = np.zeros((2))       
+        v = hd_d2 - Kp * eh - Kd * eh_d1
         # TODO: calculate control signals
-        u = np.zeros((2))
+        # u = np.zeros((2))
+        
+        Dh = np.zeros((2))
+        Gh = Mhinv @ Bh
+        Fh = -Mhinv @ Ch @ h_d1 - Mhinv @ Dh
+
+        u = np.linalg.inv(Gh) @ (v-Fh)
         
         # TODO calculate h second derivative, h''(q)
-        h_d2 = np.zeros((2))
+        # h_d2 = np.zeros((2))
+        h_d2 = Fh + Gh @ u
         
         new_state = np.concatenate([h_d1, h_d2, k_d1])
         
