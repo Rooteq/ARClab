@@ -16,9 +16,9 @@ def main():
     initial_condition = np.concatenate([h, h_d1, start])
     
     # TODO chose trajectory generator
-    trajectory_generator = trajectory_generator_circle
+    trajectory_generator = trajectory_generator_square
 
-    stats, solver = sim.run(initial_condition, 6, dt, trajectory_generator)
+    stats, solver = sim.run(initial_condition, 60, dt, trajectory_generator)
     stats = {'t': solver['t'],
              'h': solver['y'][0:2],
              'h_d1': solver['y'][2:4],

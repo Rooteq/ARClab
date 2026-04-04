@@ -134,9 +134,31 @@ def trajectory_generator_square(t, dt=1):
     if type(t) != np.ndarray:
         # TODO: generate square trajectory
         # with e.g. piece wise approach
-        h = np.array([0, 0])
-        h_d1 = np.array([0, 0])    
+        # h = np.array([0, 0])
+
+        side_length = 1.0 
+        sides = 4
+        side_time = 1.0
+
+        t = t % (sides * side_time)
+
+        vel = side_length / side_time
+
+        if t < side_time:
+            h = np.array([t*vel, 0])
+            h_d1 = np.array([vel, 0])    
+        elif t < 2 * side_time:
+            h = np.array([side_length, t*vel - side_time])
+            h_d1 = np.array([0, vel])    
+        elif t < 3 * side_time:
+            h = np.array([side_length - (t*vel - 2*side_time), side_length])
+            h_d1 = np.array([-vel, 0])    
+        elif t < 4 * side_time:
+            h = np.array([0, side_length - (t*vel - 3*side_time)])
+            h_d1 = np.array([0, -vel])    
+
         h_d2 = np.array([0, 0])
+        
     else:
         # do not change below code of this function
         h = np.zeros((2, len(t)))
@@ -222,7 +244,8 @@ class SimulatorDynamics(Simulator):
         
         # TODO: Calculate k_d1, k' which will 
         # reflect system velocities q'
-        k_d1 = np.zeros((5))
+        k_d1 = G @ R @ h_d1
+
         
         q_d1 = k_d1.reshape((-1,))
         
