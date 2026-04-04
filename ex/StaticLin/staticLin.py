@@ -148,13 +148,13 @@ def trajectory_generator_square(t, dt=1):
             h = np.array([t*vel, 0])
             h_d1 = np.array([vel, 0])    
         elif t < 2 * side_time:
-            h = np.array([side_length, t*vel - side_time])
+            h = np.array([side_length, (t - side_time)*vel])
             h_d1 = np.array([0, vel])    
         elif t < 3 * side_time:
-            h = np.array([side_length - (t*vel - 2*side_time), side_length])
+            h = np.array([side_length - (t - 2*side_time)*vel, side_length])
             h_d1 = np.array([-vel, 0])    
         elif t < 4 * side_time:
-            h = np.array([0, side_length - (t*vel - 3*side_time)])
+            h = np.array([0, side_length - (t - 3*side_time)*vel])
             h_d1 = np.array([0, -vel])    
 
         h_d2 = np.array([0, 0])
@@ -172,11 +172,45 @@ def trajectory_generator_square(t, dt=1):
 
 def trajectory_generator_circle(t, w=np.pi * 0.4, offset=0.2, A=1.0):
     h = np.array([A*np.cos(t*w + offset), A*np.sin(t*w + offset)])
-    # TODO: calculate first and second derivative
-    # h_d1 = np.array([t, t])    
-    # h_d2 = np.array([t, t])
     h_d1 = np.array([-A*w*np.sin(t*w+offset), A*w*np.cos(t*w+offset)])    
     h_d2 = np.array([-A*(w**2)*np.cos(t*w+offset), -A*(w**2)*np.sin(t*w+offset)])
+    return h, h_d1, h_d2
+
+def trajectory_generator_eight(t, A=1.0):
+    if type(t) != np.ndarray:
+        time_for_circle = 3.0
+        w = 2*np.pi/time_for_circle
+        w2 = -w
+
+        offset = np.pi/2
+        offset2 = -np.pi/2
+
+        shift = 2*A
+
+        t = t % (2*time_for_circle)
+
+        # h = np.zeros((2, len(t)))
+        # h_d1 = np.zeros((2, len(t)))
+        # h_d2 = np.zeros((2, len(t)))
+        
+        if t < time_for_circle:
+            h = np.array([A*np.cos(t*w + offset), A*np.sin(t*w + offset)])
+            h_d1 = np.array([-A*w*np.sin(t*w+offset), A*w*np.cos(t*w+offset)])    
+            h_d2 = np.array([-A*(w**2)*np.cos(t*w+offset), -A*(w**2)*np.sin(t*w+offset)])
+        else:
+            # h = np.array([A*np.cos(t*w + offset2),shift +  A*np.sin(t*w + offset2)])
+            # h_d1 = np.array([-A*w*np.sin(t*w+offset2), A*w*np.cos(t*w+offset2)])    
+            # h_d2 = np.array([-A*(w**2)*np.cos(t*w+offset2), -A*(w**2)*np.sin(t*w+offset2)])
+            h = np.array([A*np.cos(t*w2 + offset2),shift +  A*np.sin(t*w2 + offset2)])
+            h_d1 = np.array([-A*w2*np.sin(t*w2+offset2), A*w2*np.cos(t*w2+offset2)])    
+            h_d2 = np.array([-A*(w2**2)*np.cos(t*w2+offset2), -A*(w2**2)*np.sin(t*w2+offset2)])
+    else:
+        h = np.zeros((2, len(t)))
+        h_d1 = np.zeros((2, len(t)))
+        h_d2 = np.zeros((2, len(t)))
+        for i in range(len(t)):
+            h[:,i], h_d1[:,i], h_d2[:,i] = trajectory_generator_eight(t[i])
+
     return h, h_d1, h_d2
 
 
