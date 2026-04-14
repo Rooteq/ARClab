@@ -21,6 +21,18 @@ class UnicycleModel(Model):
     def step(self, u: np.array):
         # TODO given current state (self._state) and control inputs u
         # evaluate new state after time self._dt
+        # v = self.R/2 * (u[0]+u[1])
+        # omega = self.R/(2*self.L) * (u[0]-u[1])
+
+        # x_d = np.cos(self._state[2]) * v
+        # y_d = np.sin(self._state[2]) * v
+        # theta_d = omega
+
+        # self._state = self._state + np.array([x_d, y_d, theta_d]) * self._dt
+
+        K = np.array([[np.cos(self.state[2]), 0], [np.sin(self.state[2]), 0], [0, 1]])
+        dx = np.matmul(K, u)
+        self._state = self._state + dx * self._dt
         
         return self._state
         
@@ -59,7 +71,9 @@ class MassDamperSpringModel(Model):
         # TODO given current state (self._state) and control input u
         # evaluate new state after time self._dt
         # State: [x, x_dot]
-        # x_ddot = (u[0] - c*x_dot - k*x) / m_mass
+
+        x_ddot = (u[0] - self.c * self._state[1] - self.k* self._state[0]) / self.m_mass
+        self._state = self._state + np.array([self._state[1], x_ddot]) * self._dt
         # new_state = state + [x_dot, x_ddot] * dt
         
         return self._state
@@ -247,27 +261,31 @@ class MPC:
             # TODO
             # 1. Append m first points from the optimization solution
             # to the solution list
-            
+            solution.append(result.x[:m])
             
             # 2. Update model's state with current state
-            
+            self.model.state = self.model_state
             
             # 3. Calculate next state of the model using step() method given 
             # latest control signals (at the end of solution list
             # which was updated in point 1).
+            state = self.model.step(solution[-1])
             
             
             # 4. Save new state as new point on path
             # Append it to path list
+            path.append(state)
             
             
             # 5. Preserve last vector of control input by
             # removing first m values from optimization result and 
             # assigning it to control input list u
-            
+            u = np.array(result.x[m:])
             
             # 6. Extend control input list with m  
             # values, e.g. with m zeros
+            # u.extend([0.0] * m)
+            u = np.append(u, np.zeros(m))
             
             # Statistics
             if desired_trajectory is not None:
@@ -328,14 +346,25 @@ class MPC:
             # iterate new state of the model
             # TODO: 1. run step on the model 
             # providing control signals
+            state = self.model.step(u[i*m : (i+1)*m])
             
             # calculate distance to the goal
             # TODO: 2. calculate distance to goal based on 
             # newly evaluated state, and evaluate angle difference 
             # between current orientation and goal orientation
+            diff_lin = np.linalg.norm(state[:2] - self._goal[:2])
+            diff_alg = min(
+                abs(state[2] - self._goal[2]) ,
+                2*np.pi - abs(state[2] - self._goal[2])
+            )
+
+            diff_ang = abs(state[2] - self._goal[2])
+            
             
             # TODO: 3. using the distance to goal 
             # calculate cost and add it to overall 'cost'
+            cost += 5 * diff_lin
+            cost += 1 * diff_ang
             
             for obstacle in self._obstacles:
                 pass
@@ -358,14 +387,18 @@ class MPC:
         cost = 0
         for i in range(steps):
             # TODO: 1. run step on the model providing control signals
+            self.model.step(u[i*m : (i+1)*m])
             
             # TODO: 2. evaluate time at prediction step i
-            # t = self._current_time + (i + 1) * self.dt
+            t = self._current_time + (i + 1) * self.dt
             
             # TODO: 3. get desired position from self._desired_trajectory(t)
             # and calculate tracking error (state[0] - desired)
+            des_pos = self._desired_trajectory(t)
+            e = self.model.state[0] - des_pos
             
             # TODO: 4. add squared error to cost
+            cost += e**2
             pass
         return cost
     
