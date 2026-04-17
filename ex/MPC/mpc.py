@@ -31,7 +31,7 @@ class UnicycleModel(Model):
         # self._state = self._state + np.array([x_d, y_d, theta_d]) * self._dt
 
         K = np.array([[np.cos(self.state[2]), 0], [np.sin(self.state[2]), 0], [0, 1]])
-        dx = np.matmul(K, u)
+        dx = K @ u
         self._state = self._state + dx * self._dt
         
         return self._state
@@ -50,7 +50,8 @@ class AckermanModel(Model):
     def step(self, u: np.array):
         # TODO given current state (self._state) and control inputs u
         # evaluate new state after time self._dt
-        
+        dx = np.array([u[0]*np.cos(self.state[2]), u[0]*np.sin(self.state[2]), (u[0]/self.l)*np.tan(u[1])])
+        self._state = self._state + dx * self._dt
         return self._state
         
     @property
@@ -92,7 +93,13 @@ class Circle(Obstacle):
 
     def distance(self, point: np.array):
         # TODO calculate distance to the center of circular obstacle
-        distance = 0
+        distance = np.linalg.norm(point[:2] - self._center)
+        # distance = distance - self._radius
+        # dx = point[0] - self._center[0]
+        # dy = point[1] - self._center[1]
+        # return np.sqrt(dx**2 + dy**2)
+
+        # distance = 0
         return distance
     
     def _inside(self, point: np.array, radius):
@@ -161,12 +168,18 @@ class Rectangle(Obstacle):
     def _inside(self, point: np.array, margin = 0):
         distance =  self.distance(point)
         
-        # TODO
-        # check if there is collision with the rectangle
-        # for this you can use points, center of the rectangle 
-        # or other technique
+        dx = point[0] - self._center[0]
+        dy = point[1] - self._center[1]
 
-        return False, distance
+        local_x = dx * np.cos(self._orientationRad) + dy * np.sin(self._orientationRad)
+        local_y = -dx * np.sin(self._orientationRad) + dy * np.cos(self._orientationRad)
+        
+        half_width = (self._width + margin) / 2
+        half_height = (self._height + margin) / 2
+        
+        is_inside = abs(local_x) <= half_width and abs(local_y) <= half_height
+
+        return is_inside, distance
     
     def inside(self, point: np.array):
         return self._inside(point)
@@ -353,10 +366,6 @@ class MPC:
             # newly evaluated state, and evaluate angle difference 
             # between current orientation and goal orientation
             diff_lin = np.linalg.norm(state[:2] - self._goal[:2])
-            diff_alg = min(
-                abs(state[2] - self._goal[2]) ,
-                2*np.pi - abs(state[2] - self._goal[2])
-            )
 
             diff_ang = abs(state[2] - self._goal[2])
             
@@ -367,7 +376,19 @@ class MPC:
             cost += 1 * diff_ang
             
             for obstacle in self._obstacles:
-                pass
+                dist = obstacle.distance(state[:2])
+                inside, _ = obstacle.inside(state[:2])
+                inside_safe, _ = obstacle.inside_safe(state[:2])
+
+                # if dist < 1.0:
+                #     cost += 100
+                if inside:
+                    cost += 16.0
+                elif inside_safe:
+                    cost += 2.0 / (dist + 10E-5)
+
+
+                # pass
                 # TODO: 4. evaluate possible collision with obstacles
                 
         return cost
