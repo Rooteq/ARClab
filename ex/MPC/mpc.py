@@ -30,8 +30,8 @@ class UnicycleModel(Model):
 
         # self._state = self._state + np.array([x_d, y_d, theta_d]) * self._dt
 
-        K = np.array([[np.cos(self.state[2]), 0], [np.sin(self.state[2]), 0], [0, 1]])
-        dx = K @ u
+        G = np.array([[np.cos(self.state[2]), 0], [np.sin(self.state[2]), 0], [0, 1]])
+        dx = G @ u
         self._state = self._state + dx * self._dt
         
         return self._state
@@ -220,7 +220,7 @@ class MPC:
         self._obstacles = []
         self._stats = {}
         
-    def run(self, start: np.array, goal: np.array = None, obstacles = [], maxiter=100, desired_trajectory=None):
+    def run(self, start: np.array, goal: np.array = None, obstacles = [], maxiter=100, desired_trajectory=None, trajectory_2d=None):
         """Run MPC algorithm
 
         Args:
@@ -246,7 +246,14 @@ class MPC:
         self._obstacles = obstacles
         m = self.model.m
         
-        if desired_trajectory is not None:
+        if trajectory_2d is not None:
+            self._desired_trajectory = trajectory_2d
+            cost_fn = self.cost_trajectory_2d
+            bounds = Bounds([-10]*n, [10]*n)
+            stats = {'step': [0], 'robot': [start.copy()], 'dt': self.dt,
+                     'error': [np.linalg.norm(start[0:2] - trajectory_2d(0))],
+                     'cost': [0]}
+        elif desired_trajectory is not None:
             cost_fn = self.cost_trajectory
             bounds = Bounds([-10]*n, [10]*n)
             stats = {'step': [0], 'robot': [start.copy()], 'dt': self.dt,
@@ -301,7 +308,17 @@ class MPC:
             u = np.append(u, np.zeros(m))
             
             # Statistics
-            if desired_trajectory is not None:
+            if trajectory_2d is not None:
+                self._current_time += self.dt
+                desired = trajectory_2d(self._current_time)
+                error = np.linalg.norm(state[0:2] - desired)
+                stats['step'].append(i)
+                stats['cost'].append(result.fun)
+                stats['robot'].append(state.copy())
+                stats['error'].append(error)
+                print(f"t: {self._current_time:.2f}, Step {i:05d}, cost {result.fun:.4f}, "
+                      f"x: {state[0:2]}, desired: {desired}, error: {error:.4f}")
+            elif desired_trajectory is not None:
                 self._current_time += self.dt
                 desired = desired_trajectory(self._current_time)
                 error = state[0] - desired
@@ -327,7 +344,7 @@ class MPC:
             # If the cost function is not dropping faster 
             # than some given value terminate calculation
             cost_diff = np.abs(previous_cost - result.fun)
-            if desired_trajectory is None and cost_diff < 0.01:
+            if desired_trajectory is None and trajectory_2d is None and cost_diff < 0.01:
                 print("Early stop")
                 earlyStop = i
                 break
@@ -391,6 +408,29 @@ class MPC:
                 # pass
                 # TODO: 4. evaluate possible collision with obstacles
                 
+        return cost
+
+    def cost_trajectory_2d(self, u: np.array) -> float:
+        self.model.state = self.model_state
+        m = self.model.m
+        steps = len(u) // m
+        cost = 0
+        for i in range(steps):
+            # TODO: 1. run step on the model providing control signals
+            self.model.step(u[i*m : (i+1)*m])
+            
+            # TODO: 2. evaluate time at prediction step i
+            t = self._current_time + (i + 1) * self.dt
+            
+            # TODO: 3. get desired position from self._desired_trajectory(t)
+            # and calculate tracking error (state[0] - desired)
+            pos = self.model.state[0:2]
+            des_pos = self._desired_trajectory(t)
+            e = np.linalg.norm(pos - des_pos)
+            
+            # TODO: 4. add squared error to cost
+            cost += e**2
+            pass
         return cost
     
     def cost_trajectory(self, u: np.array) -> float:
@@ -592,6 +632,43 @@ class MPC:
             axes[2].legend()
         axes[2].set_xlabel('Time [s]')
         axes[2].grid(True)
+        
+        plt.tight_layout()
+        plt.show()
+
+    def plot_2d(self, path, stats, desired_trajectory=None):
+        """Plot 2D trajectory tracking response
+
+        Args:
+            path (list): List containing system states [x, y, ...]
+            stats (dict): Statistics dictionary from run()
+            desired_trajectory (callable, optional): Desired trajectory function
+        """
+        path = np.array(path)
+        time = np.array(stats['step']) * stats['dt']
+        
+        fig, axes = plt.subplots(2, 1, figsize=(8, 10))
+        
+        # Cartesian Path
+        axes[0].plot(path[:, 0], path[:, 1], 'b-', label='Robot Path')
+        if desired_trajectory is not None:
+            desired_x = [desired_trajectory(t)[0] for t in time]
+            desired_y = [desired_trajectory(t)[1] for t in time]
+            axes[0].plot(desired_x, desired_y, 'r--', label='Desired Path')
+        axes[0].set_xlabel('X')
+        axes[0].set_ylabel('Y')
+        axes[0].set_aspect('equal')
+        axes[0].legend()
+        axes[0].grid(True)
+        axes[0].set_title('Cartesian Space Trajectory')
+        
+        # Tracking error
+        if 'error' in stats:
+            axes[1].plot(time, stats['error'], 'r-', label='Tracking error')
+            axes[1].set_ylabel('Error')
+            axes[1].legend()
+        axes[1].set_xlabel('Time [s]')
+        axes[1].grid(True)
         
         plt.tight_layout()
         plt.show()
