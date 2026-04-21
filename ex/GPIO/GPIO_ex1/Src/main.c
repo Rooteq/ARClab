@@ -39,6 +39,8 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "stm32l4xx_hal.h"
+#include "stm32l4xx_hal_gpio.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -56,6 +58,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define RX_BUF_SIZE 64
 
 /* USER CODE END PD */
 
@@ -84,129 +87,192 @@ int _write(int file, char *ptr, int len) {
 	return len;
 }
 
+const uint32_t interval = 1000; // blinking interval
+
+// buffer for storing uart characters
+volatile uint8_t rx_buffer[RX_BUF_SIZE];
+volatile uint16_t rx_head = 0;
+volatile uint16_t rx_tail = 0;
+uint8_t rx_byte;
+
+void handle_modes()
+{
+        if (rx_tail != rx_head) {
+            
+            // oldest byte
+            uint8_t process_byte = rx_buffer[rx_tail];
+            
+            rx_tail = (rx_tail + 1) % RX_BUF_SIZE; // advance tail
+            
+            switch (process_byte) {
+              
+              case '0':
+
+                // HAL_GPIO_TogglePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin);
+                // HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+                HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_RESET);
+                HAL_GPIO_WritePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin, GPIO_PIN_RESET);
+              break;
+              
+              case '1':
+                HAL_GPIO_WritePin(LED1_GPIO_Port, LED1_Pin, GPIO_PIN_SET);
+                HAL_GPIO_WritePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin, GPIO_PIN_SET);
+              break;
+
+              case 't':
+                HAL_GPIO_TogglePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin);
+                HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+
+              break;
+
+              default:
+                printf("WRONG CHARACTER\r\n");
+              break;
+            }
+            // if (process_byte == 'A') {
+            //     // Turn on LED
+            // } else if (process_byte == 'B') {
+            //     // Turn off LED
+            // }
+        }
+}
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
-	/* USER CODE BEGIN 1 */
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+
+  /* USER CODE BEGIN 1 */
 	int status = 0;
 	int counter = 0;
 
-	/* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Configure the system clock */
-	SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-	/* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-	/* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_USART2_UART_Init();
-	/* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USART2_UART_Init();
+  /* USER CODE BEGIN 2 */
 
-	/* USER CODE END 2 */
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1) {
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-		/* USER CODE BEGIN 3 */
-		HAL_GPIO_TogglePin(TIMER1_GPIO_Port, TIMER1_Pin);
-		status = HAL_GPIO_ReadPin(TIMER5_GPIO_Port, TIMER5_Pin);
+    /* USER CODE BEGIN 3 */
+		// HAL_GPIO_TogglePin(TIMER1_GPIO_Port, TIMER1_Pin);
+		// status = HAL_GPIO_ReadPin(TIMER5_GPIO_Port, TIMER5_Pin);
 
-		printf("Current state of button is %d, (%d)\r\n", status, counter);
+		// printf("Current state of button is %d, (%d)\r\n", status, counter);
 
-		HAL_GPIO_TogglePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin);
-		HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
+		// HAL_GPIO_TogglePin(LED_ON_BOARD_GPIO_Port, LED_ON_BOARD_Pin);
+		// HAL_GPIO_TogglePin(LED1_GPIO_Port, LED1_Pin);
 
-		HAL_Delay(1000);
+    handle_modes();
+    HAL_Delay(50);
+		// HAL_Delay(1000);
 
 		++counter;
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
-	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
-	RCC_PeriphCLKInitTypeDef PeriphClkInit = { 0 };
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-	/** Initializes the RCC Oscillators according to the specified parameters
-	 * in the RCC_OscInitTypeDef structure.
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-	RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-	RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-	RCC_OscInitStruct.PLL.PLLM = 1;
-	RCC_OscInitStruct.PLL.PLLN = 10;
-	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
-	RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
-	RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-		Error_Handler();
-	}
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  /** Configure the main internal regulator output voltage
+  */
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK) {
-		Error_Handler();
-	}
-	PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2;
-	PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
-	if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK) {
-		Error_Handler();
-	}
-	/** Configure the main internal regulator output voltage
-	 */
-	if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1)
-			!= HAL_OK) {
-		Error_Handler();
-	}
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  rx_buffer[rx_head] = rx_byte;
+        
+  rx_head = (rx_head + 1) % RX_BUF_SIZE; // advance head
+
+  HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
+}
+
 
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-	/* USER CODE BEGIN Error_Handler_Debug */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 
-	/* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
-
-#ifdef  USE_FULL_ASSERT
+#ifdef USE_FULL_ASSERT
 /**
   * @brief  Reports the name of the source file and the source line number
   *         where the assert_param error has occurred.
@@ -222,5 +288,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -26,3 +26,8 @@ Backup
 mainfull*.c
 *Full.py
 *full.py
+
+build
+*.elf
+*.hex
+*.map
