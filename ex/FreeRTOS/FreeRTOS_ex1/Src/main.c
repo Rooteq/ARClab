@@ -81,19 +81,17 @@ int _write(int file, char *ptr, int len) {
 #define ADC_BITS (1<<0)
 // const uint8_t 0b1;
 
+uint32_t value_adc;
+
 uint16_t measurement;
 SemaphoreHandle_t mutex;
-
 EventGroupHandle_t event_group;
-
-
-
-uint32_t value_adc;
 
 void measureTask(void *args) {
 
 	for (;;) {
 
+    TickType_t previous_write = xTaskGetTickCount();
     HAL_ADC_Start(&hadc1);
 
     if (HAL_ADC_PollForConversion(&hadc1, HAL_MAX_DELAY) == HAL_OK)
@@ -110,15 +108,14 @@ void measureTask(void *args) {
         printf("Failed to get mutex in measure task");
       }
     }
-
-    vTaskDelay(1000);
+    vTaskDelayUntil(&previous_write, 1000);
+    // vTaskDelay(1000);
 	}
 }
 
 void commTask(void *args) {
 
 	for (;;) {
-      TickType_t previous_write = xTaskGetTickCount();
 
       uint16_t temp_meas = 0;
       EventBits_t bits = xEventGroupWaitBits(event_group, 
@@ -135,7 +132,6 @@ void commTask(void *args) {
         }
 
         printf("ADC: %u, time: %lu\r\n", temp_meas, HAL_GetTick());
-        // vTaskDelayUntil(&previous_write, 1000);
       }
       else
       {
