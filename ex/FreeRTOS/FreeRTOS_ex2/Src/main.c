@@ -21,12 +21,15 @@
 #include "main.h"
 #include "adc.h"
 #include "dma.h"
+#include "stm32l4xx_hal.h"
+#include "stm32l4xx_hal_def.h"
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <stdint.h>
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
@@ -66,6 +69,13 @@ void SystemClock_Config(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
+typdef struct
+{
+  uint16_t value;
+  uint32_t counter;
+} elem_t;
+
 int _write(int file, char *ptr, int len) {
 	HAL_UART_Transmit(&huart2, (uint8_t*) ptr, len, 50);
 	return len;
@@ -79,7 +89,8 @@ enum QueueMessages {
 	QueueMsgNoData, QueueMsgNewData, QueueMsgNewDataChange,
 };
 
-uint16_t measurement;
+volatile uint16_t measurement;
+
 uint8_t queueError = QueueOK;
 SemaphoreHandle_t mutex;
 QueueHandle_t queue;
@@ -92,6 +103,27 @@ void measureTask(void *args) {
 
 	for (;;) {
 
+      xStatus = xQueueSendToBack(queue, (void *)&measurement, 0);
+
+      if (xSemaphoreTake(mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+
+      if(xStatus == pdPASS)
+        queueError = QueueOK;
+      else
+        queueError = QueueWriteProblem;
+        // queueError = 
+      // switch (xStatus) {
+
+      
+      // }
+
+        xSemaphoreGive(mutex);
+      }
+      else {
+        printf("Failed to get mutex in measure task");
+      }
+
+      vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(300));
 	}
 }
 
@@ -99,13 +131,50 @@ void commTask(void *args) {
 	TickType_t xLastWakeTime;
 	uint16_t measurement_local = 0;
 	uint16_t flag_local;
-	uint16_t histeresis = 0;
 	BaseType_t queue_size;
 	BaseType_t xStatus;
+
+  TickType_t current_period = pdMS_TO_TICKS(100);
 
 	xLastWakeTime = xTaskGetTickCount();
 
 	for (;;) {
+    queue_size = uxQueueMessagesWaiting(queue);
+
+    if(queue_size > 13)
+      current_period = pdMS_TO_TICKS(100);
+    if(queue_size < 3)
+      current_period = pdMS_TO_TICKS(500);
+
+    xStatus = xQueueReceive(queue, &measurement_local, 0);
+
+      if (xSemaphoreTake(mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+
+      if(xStatus == pdPASS)
+      {
+        queueError = QueueOK;
+      }
+      else if((xStatus != pdPASS) && (queue_size == 0))
+      {
+        queueError = QueueEmpty;
+      }
+      else
+      {
+        queueError = QueueCantRead;
+      }
+
+        flag_local = queueError;
+
+        xSemaphoreGive(mutex);
+      }
+      else {
+        printf("Failed to get mutex in measure task");
+      }
+
+    printf("ADC: %u, time: %lu, queue_size: %u, error: %u\r\n", measurement_local, HAL_GetTick(), (unsigned int)queue_size, flag_local);
+
+    vTaskDelayUntil(&xLastWakeTime, current_period);
+
 
 	}
 }
@@ -148,15 +217,31 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_3);
+  // HAL_ADC_Start_DMA(&hadc1, (uint32_t *) &measurement, 1);
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t*)&measurement, 1);
+  HAL_TIM_Base_Start_IT(&htim6);
+
 	// --> start TIM1 to generate PWM signal on TIMER3 connector
 	// --> start TIM6 in interrupt
 	// --> start ADC1 in DMA mode
 	// --> create a mutex
 	// --> create a queue
 	// --> create all necessary tasks
+
+  queue = xQueueCreate(16, sizeof(uint16_t));
+  vQueueAddToRegistry(queue, "queue");
+
+  mutex = xSemaphoreCreateMutex();
+
+
 	printf("Starting!\r\n");
 
 	// --> start FreeRTOS scheduler
+  xTaskCreate( measureTask, "measure_task", 256, NULL, 1, NULL);
+  xTaskCreate( commTask, "comm_task", 256, NULL, 1, NULL);
+
+  vTaskStartScheduler();
 
   /* USER CODE END 2 */
 
@@ -164,7 +249,8 @@ int main(void)
   /* USER CODE BEGIN WHILE */
 	while (1) {
     /* USER CODE END WHILE */
-
+    // printf("ADC: %i, time: %lu\r\n", measurement, HAL_GetTick());
+    // HAL_Delay(1000);
     /* USER CODE BEGIN 3 */
 	}
   /* USER CODE END 3 */
