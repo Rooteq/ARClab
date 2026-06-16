@@ -27,6 +27,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,6 +85,7 @@ int _write(int file, char *ptr, int len) {
 SemaphoreHandle_t set_val_mutex;
 QueueHandle_t measured_queue;
 QueueHandle_t desired_queue;
+QueueHandle_t ctrl_params_queue;
 QueueHandle_t control_queue;
 
 typedef struct
@@ -91,6 +93,12 @@ typedef struct
   float kp, ki, kd;
   float e, e_prev, e_sum;
 } pid_t;
+
+typedef struct
+{
+  float a, b, c;
+} sin_control_t;
+
 
 QueueHandle_t rx_queue;
 uint8_t rx_byte;
@@ -142,6 +150,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
   portYIELD_FROM_ISR(HPTW);
 }
 
+uint16_t sin_fun(uint32_t time, sin_control_t params)
+{
+  const float dac_per_volt = 4096.0f / 3.3f;
+  float result = (params.a * sinf(params.b * (time/100.0f)) + params.c) * dac_per_volt;
+  if (result < 0.0f)    result = 0.0f;
+  if (result > 4095.0f) result = 4095.0f;
+  return (uint16_t)result;
+}
+
 void measureTask(void *args) {
 	TickType_t xLastWakeTime;
 
@@ -176,6 +193,7 @@ void controlTask(void *args) {
 
   uint16_t measured;
   uint16_t desired;
+  sin_control_t ctrl_params;
   uint16_t control_val;
 
 
@@ -186,9 +204,14 @@ void controlTask(void *args) {
 
 		}
 
-		if (xQueuePeek(desired_queue, &desired, 100) != pdPASS) {
-			desired = 0;
+		if (xQueuePeek(ctrl_params_queue, &ctrl_params, 100) != pdPASS) {
+			// desired = 0;
 		}
+
+    uint32_t time_ms = xTaskGetTickCount() * portTICK_PERIOD_MS;
+
+    desired = sin_fun(time_ms, ctrl_params);
+    xQueueOverwrite(desired_queue, &desired);
 
     control_val = calculate_control(&pid, measured, desired);
 		HAL_DAC_Start(&hdac1, DAC_CHANNEL_1);
@@ -241,19 +264,49 @@ void userTask(void *args) {
 	xLastWakeTime = xTaskGetTickCount();
 
   uint8_t byte;
+  sin_control_t sin_desired_values = {1.0f, 0.1f, 1.65f};
+  xQueueOverwrite(ctrl_params_queue, &sin_desired_values);
 
 	for (;;) {
     if(xQueueReceive(rx_queue, &byte, portMAX_DELAY) != pdTRUE)
       continue;
 
-    int num = byte - '0';
-    if(num < 0 || num > 9)
-    {
-      continue;
+    switch (byte) {
+      case 'x':
+        sin_desired_values.c = 0.0f;
+        break;
+      case 'y':
+        sin_desired_values.c = 1.0f;
+        break;
+      case 'z':
+        sin_desired_values.c = 1.65;
+        break;
+
+      case '0':
+        sin_desired_values.a = 0.5f;
+        break;
+      case '1':
+        sin_desired_values.a = 1.0f;
+        break;
+      case '2':
+        sin_desired_values.a = 2.0;
+        break;
+
+      case 'a':
+        sin_desired_values.b = 0.1f;
+        break;
+      case 'b':
+        sin_desired_values.b = 0.5f;
+        break;
+      case 'c':
+        sin_desired_values.b = 0.8;
+        break;
+
+      default:
+        // printf("error\r\n");
     }
 
-    uint16_t set_value = num * SET_VAL_DT;
-    xQueueOverwrite(desired_queue, &set_value);
+    xQueueOverwrite(ctrl_params_queue, &sin_desired_values);
 	}
 }
 
@@ -302,13 +355,14 @@ int main(void)
 	measured_queue = xQueueCreate(1, sizeof(uint16_t));
 	control_queue = xQueueCreate(1, sizeof(uint16_t));
 	desired_queue = xQueueCreate(1, sizeof(uint16_t));
+	ctrl_params_queue = xQueueCreate(1, sizeof(sin_control_t));
 
   HAL_UART_Receive_IT(&huart2, &rx_byte, 1);
 	// enable UART receive in interrupt mode
 
 	// --> create all necessary synchronization mechanisms
 	// --> create all necessary tasks
-	printf("Starting!\r\n");
+	// printf("Starting!\r\n");
 
   xTaskCreate(userTask, "user_task", 256, NULL, 1, NULL);
   xTaskCreate(measureTask, "measure_task", 256, NULL, 1, NULL);
